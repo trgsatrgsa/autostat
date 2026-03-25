@@ -121,6 +121,7 @@ const GARBS = [
   { id: 1659, name: "Brigandine",                pot: 28 },
   { id: 1859, name: "Praetor Suit",              pot: 29 },
   { id: 1799, name: "Armigma",                   pot: 29 },
+  { id: 1916, name: "Sakura Kimono II",          pot: 30 },
   { id: 1941, name: "Twilight Dress",            pot: 30 },
   { id: 2242, name: "Assassin Garb",             pot: 31 },
   { id: 2230, name: "Anniversary Dress",         pot: 31 },
@@ -146,8 +147,13 @@ const GARBS = [
   { id: 6089, name: "Maiden",                    pot: 49 },
   { id: 6483, name: "Anniversary Festive Garb III", pot: 49 },
   { id: 7075, name: "Trickster Costume",         pot: 54 },
+  { id: 7308, name: "Anniversary Festive Garb IV", pot: 54 },
   { id: 7700, name: "Water Priest Robe",         pot: 56 },
-  { id: 7760, name: "Anniversary Festive Garb V",pot: 57 },
+  { id: 7760, name: "Anniversary Festive Garb V",   pot: 57 },
+  { id: 8157, name: "Anniversary Festive Garb VI",  pot: 60 },
+  { id: 11111111, name: "Starry Robe",   pot: 57 },
+  // { id: ???, name: "Mulgoon Robe",  pot: ??? },
+  // { id: ???, name: "Dragoon Mail",  pot: ??? },
 ];
 
 // ─── MATH FUNCTIONS ───────────────────────────────────────────────────────────
