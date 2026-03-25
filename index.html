@@ -116,6 +116,8 @@ button#gen:hover { background: #265080; }
       <option value="1">Yes</option>
     </select>
   </div>
+  <div class="hint">Match Element: weapon already has an element (e.g. Fire weapon).
+    Adding the same element stat (Fire Element) costs only 10% potential instead of full price.</div>
 
   <!-- Garb selection (armor only) -->
   <div id="garb-row" class="row">
@@ -139,6 +141,10 @@ button#gen:hover { background: #265080; }
   <table class="slots"><thead><tr><th>#</th><th>Stat</th><th>Value</th><th></th></tr></thead>
     <tbody id="neg-body"></tbody></table>
   <button class="add-btn" onclick="addNeg()">+ Add Neg Stat</button>
+  <button class="add-btn" onclick="autoFillNeg(PHY_KEEP)" title="Best negatives — keeps ATK/Pierce/STR/DEX/Accuracy/ASPD/Crit intact"
+    style="background:#eaf0fa;border-color:#5580aa">Auto Neg (Phy)</button>
+  <button class="add-btn" onclick="autoFillNeg(MAG_KEEP)" title="Best negatives — keeps MATK/Pierce/INT/CSPD/Crit intact"
+    style="background:#f5eafa;border-color:#9055aa">Auto Neg (Mag)</button>
 
   <button id="gen" onclick="generate()">Generate Formula</button>
 </div>
@@ -300,6 +306,55 @@ function readSlots(tbodyId) {
       return { id, targetVal: id ? snapValue(raw, id, level) : raw };
     })
     .filter(s => s.id && s.targetVal !== 0);
+}
+
+// ─── AUTO FILL NEGATIVES ──────────────────────────────────────────────────────
+
+// Stats a physical build should never negate
+const PHY_KEEP = new Set([
+  'ATK','ATK %','Physical Pierce %',
+  'STR','STR %','DEX','DEX %',
+  'ASPD','ASPD %',
+  'Critical Rate','Critical Rate %','Critical Damage','Critical Damage %',
+]);
+
+// Stats a magical build should never negate
+const MAG_KEEP = new Set([
+  'MATK','MATK %','Magic Pierce %',
+  'INT','INT %',
+  'CSPD','CSPD %',
+  'Critical Rate','Critical Rate %','Critical Damage','Critical Damage %',
+]);
+
+function autoFillNeg(keep) {
+  const level     = getLevel();
+  const equipType = document.getElementById('equip-type').value;
+  const matchElem = document.getElementById('match-element').value;
+
+  const posCount  = document.getElementById('pos-body').children.length;
+  const negCount  = document.getElementById('neg-body').children.length;
+  const available = 8 - posCount - negCount;
+  if (available <= 0) return;
+
+  const usedIds = new Set([
+    ...[...document.querySelectorAll('#pos-body select')].map(s => +s.value),
+    ...[...document.querySelectorAll('#neg-body select')].map(s => +s.value),
+  ]);
+
+  const candidates = Object.values(STATS)
+    .filter(s => s.negative_ok && !usedIds.has(s.id) && !(keep && keep.has(s.name)))
+    .map(s => {
+      let mult = 1;
+      if ((s.type === 'W' && equipType === 'A') || (s.type === 'A' && equipType === 'W')) mult = 2;
+      if (s.type === 'E' && matchElem === '1') mult = 0.1;
+      const minCtr = getMinMaxSteps(s.id, -1, level);
+      const score  = s.pot * Math.abs(minCtr) * mult;
+      return { id: s.id, score, minVal: counterToVal(minCtr, s.id) };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, available);
+
+  candidates.forEach(c => addNeg(c.id, c.minVal));
 }
 
 // ─── STEP TOGGLE ──────────────────────────────────────────────────────────────

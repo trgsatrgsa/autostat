@@ -317,7 +317,7 @@ function applyStep(state, newSlotStats, newVals, equipType, matchElement, smithP
 
     deltaPotX100 += calcPot(id, oldV, newV, penalty, equipType, matchElement);
 
-    if (newV > oldV) {
+    if (newCtrs[i] !== state.ctrs[i]) {
       const mat = calcMats(state.ctrs[i], newCtrs[i], id, smithProf);
       if (mat > 0) {
         const mid = STATS[id].mat_id;
