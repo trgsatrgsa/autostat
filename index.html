@@ -97,11 +97,9 @@ button#gen:hover { background: #265080; }
 
   <div class="sec">Character</div>
   <div class="row"><label>Base Level</label>
-    <input type="number" id="baselevel" value="315" min="10" max="400" oninput="updateAllRanges()"></div>
+    <input type="number" id="baselevel" placeholder="e.g. 315" min="10" max="400" oninput="updateAllRanges()"></div>
   <div class="row"><label>Smith Proficiency</label>
-    <input type="number" id="smithprof" value="0" min="0" max="300"></div>
-  <div class="row"><label>VIT (armor bonus)</label>
-    <input type="number" id="vit" value="0" min="0" max="510" oninput="onVitChange()"></div>
+    <input type="number" id="smithprof" placeholder="e.g. 100" min="0" max="300"></div>
 
   <div class="sec">Equipment</div>
   <div class="row"><label>Type</label>
@@ -127,9 +125,15 @@ button#gen:hover { background: #265080; }
     </select>
   </div>
 
-  <div class="row"><label>Base Potential</label>
-    <input type="number" id="base-pot" value="59" min="0" max="999" oninput="onPotChange()"></div>
-  <div class="info" id="pot-info">Effective potential: 59</div>
+  <div class="row"><label>Original Pot</label>
+    <input type="number" id="original-pot" placeholder="class base" min="1" max="999" oninput="onOriginalPotChange()"></div>
+  <div class="hint">Class base potential — auto-filled by garb selection. Anchors the success rate formula.</div>
+
+  <div class="row"><label>Starting Pot</label>
+    <input type="number" id="start-pot" placeholder="actual on your garb" min="1" max="999" oninput="onStartPotChange()"></div>
+  <div class="hint">Actual pot shown on your garb. If bought from a high-VIT crafter, enter the higher number here. Usually same as Original Pot.</div>
+
+  <div class="info" id="pot-info"></div>
 
   <div class="sec">Positive Stats (target)</div>
   <div class="hint">Slots used by pos + neg combined ≤ 8</div>
@@ -178,22 +182,15 @@ const STAT_OPTS = '<option value="0">— none —</option>' +
 
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
 
-function vitBonus() {
-  const vit  = +document.getElementById('vit').value || 0;
-  const type = document.getElementById('equip-type').value;
-  return type === 'A' ? Math.floor(vit / 10) : 0;
-}
-
-function effectivePot() {
-  return (+document.getElementById('base-pot').value || 0) + vitBonus();
-}
-
 function updatePotInfo() {
-  const base  = +document.getElementById('base-pot').value || 0;
-  const bonus = vitBonus();
-  const vit   = +document.getElementById('vit').value || 0;
-  document.getElementById('pot-info').textContent =
-    `Effective potential: ${base + bonus}  (base ${base} + VIT ${vit}÷10 = +${bonus}, armor only)`;
+  const orig  = +document.getElementById('original-pot').value || 0;
+  const start = +document.getElementById('start-pot').value || 0;
+  const info  = document.getElementById('pot-info');
+  if (!orig && !start) { info.textContent = ''; return; }
+  if (start > orig)
+    info.textContent = `Starting pot: ${start}  ·  Original (success rate anchor): ${orig}  ·  Extra headroom: +${start - orig}`;
+  else
+    info.textContent = `Starting pot: ${start || orig}  ·  Original (success rate anchor): ${orig}`;
 }
 
 function onTypeChange() {
@@ -203,14 +200,24 @@ function onTypeChange() {
 }
 
 function onGarbChange() {
-  const v = document.getElementById('garb-select').value;
-  if (v) document.getElementById('base-pot').value = v;
+  const v  = document.getElementById('garb-select').value;
+  if (!v) return;
+  const op = document.getElementById('original-pot');
+  const sp = document.getElementById('start-pot');
+  const prevOrig = op.value;
+  op.value = v;
+  // sync start-pot only if it was empty or matched the old original
+  if (!sp.value || sp.value === prevOrig) sp.value = v;
   updatePotInfo();
 }
 
-function onVitChange() { updatePotInfo(); }
-function onPotChange() {
-  document.getElementById('garb-select').value = ''; // deselect garb when manual
+function onOriginalPotChange() {
+  document.getElementById('garb-select').value = '';
+  updatePotInfo();
+}
+
+function onStartPotChange() {
+  document.getElementById('garb-select').value = '';
   updatePotInfo();
 }
 
@@ -457,29 +464,36 @@ function renderResult(res, idx) {
 // ─── GENERATE ─────────────────────────────────────────────────────────────────
 
 function generate() {
-  const level     = +document.getElementById('baselevel').value || 315;
-  const smithProf = +document.getElementById('smithprof').value || 0;
+  const area      = document.getElementById('result-area');
+  const levelEl    = document.getElementById('baselevel');
+  const smithEl    = document.getElementById('smithprof');
+  const origPotEl  = document.getElementById('original-pot');
+  const startPotEl = document.getElementById('start-pot');
+
+  let bad = false;
+  [[levelEl, +levelEl.value < 10], [smithEl, false], [origPotEl, false], [startPotEl, false]].forEach(([el, extra]) => {
+    if (el.value === '' || extra) { el.classList.add('level-required'); bad = true; }
+    else el.classList.remove('level-required');
+  });
+  if (bad) {
+    area.innerHTML = '<div class="err">Fill in Base Level (min 10), Smith Proficiency, Original Pot, and Starting Pot first.</div>';
+    return;
+  }
+
+  const level     = +levelEl.value;
+  const smithProf = +smithEl.value;
   const equipType = document.getElementById('equip-type').value;
   const matchElem = document.getElementById('match-element').value;
-  const startPot  = effectivePot();
-  const basePot   = +document.getElementById('base-pot').value || 0;
+  const startPot  = +startPotEl.value;
+  const basePot   = +origPotEl.value;
 
   const positive = readSlots('pos-body');
   const negative = readSlots('neg-body');
-  const area     = document.getElementById('result-area');
 
   if (!positive.length) {
     area.innerHTML = '<div class="err">Add at least one positive target stat.</div>';
     return;
   }
-
-  // Level required
-  if (!level || level < 10) {
-    document.getElementById('baselevel').classList.add('level-required');
-    area.innerHTML = '<div class="err">Base Level is required (min 10).</div>';
-    return;
-  }
-  document.getElementById('baselevel').classList.remove('level-required');
 
   // Level cap check
   for (const p of positive) {
@@ -504,10 +518,10 @@ function generate() {
     return;
   }
 
-  const vb  = vitBonus();
+  const extra = startPot !== basePot ? ` (original ${basePot} + extra ${startPot - basePot})` : '';
   const hdr = `<div style="font-size:11px;color:#666;margin-bottom:8px">
     ${equipType === 'A' ? 'Armor' : 'Weapon'} · Lv${level} · Smith ${smithProf} ·
-    Starting Pot: ${startPot} (base ${basePot}${vb > 0 ? ` + VIT bonus ${vb}` : ''}) ·
+    Starting Pot: ${startPot}${extra} ·
     Match Element: ${matchElem === '1' ? 'Yes' : 'No'} ·
     ${results.length} rate tier${results.length > 1 ? 's' : ''} found
   </div>`;
@@ -525,8 +539,11 @@ function generate() {
   [[33,-22],[34,-6],[26,-8],[23,-14]].forEach(([id,v]) => addNeg(id, v));
 
   // Select the matching garb (Anniversary Festive Garb, pot=38... no, use 59 manually)
-  document.getElementById('equip-type').value = 'A';
-  document.getElementById('base-pot').value   = 59;
+  document.getElementById('baselevel').value    = 315;
+  document.getElementById('smithprof').value    = 0;
+  document.getElementById('equip-type').value   = 'A';
+  document.getElementById('original-pot').value = 59;
+  document.getElementById('start-pot').value    = 59;
   onTypeChange();
   updatePotInfo();
   updateAllRanges();
