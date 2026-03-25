@@ -413,7 +413,8 @@ function renderResult(res, idx) {
     for (let i = 0; i < 8; i++) {
       const id = step.slotStats[i];
       if (!id) continue;
-      const d = step.vals[i] - (prevVals[i] || 0);
+      const rawD = step.vals[i] - (prevVals[i] || 0);
+      const d = step.repeat > 1 ? rawD / step.repeat : rawD;
       if (d === 0) continue;
       const sign = d > 0 ? '+' : '';
       const cls  = d > 0 ? 'pos' : 'neg';
