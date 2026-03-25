@@ -377,7 +377,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
     const r = applyStep(state, phase1Slots, newVals, equipType, matchElement, smithProf);
     if (!r) continue;
     if (r.state.pot < 0) return null;
-    rawSteps.push({ slotStats: [...phase1Slots], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate });
+    rawSteps.push({ slotStats: [...phase1Slots], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
     state = r.state;
   }
 
@@ -391,7 +391,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
 
     const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf);
     if (r) {
-      rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate });
+      rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
       state = r.state;
     }
   }
@@ -402,7 +402,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
     newVals[0] = counterToVal(n + 1, primary.id);
     const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf);
     if (!r) continue;
-    rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate });
+    rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
     state = r.state;
   }
 
@@ -413,7 +413,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
 
   const rf = applyStep(state, slotStats, finalVals, equipType, matchElement, smithProf);
   if (rf) {
-    rawSteps.push({ slotStats: [...slotStats], vals: [...finalVals], deltas: rf.deltas, mats: rf.mats, rate: rf.rate });
+    rawSteps.push({ slotStats: [...slotStats], vals: [...finalVals], deltas: rf.deltas, mats: rf.mats, rate: rf.rate, delta: rf.delta, potAfter: rf.state.pot });
     state = rf.state;
   }
 

@@ -69,8 +69,13 @@ button#gen:hover { background: #265080; }
 .badge.blow  { background: #f8d7da; color: #721c24; }
 .badge.bzero { background: #e8e8e8; color: #555; }
 
-.step-row { padding: 2px 0; border-bottom: 1px solid #eee; display: flex; gap: 6px; font-size: 12px; }
+.step-row { padding: 3px 0; border-bottom: 1px solid #eee; display: flex; gap: 6px; font-size: 12px;
+            cursor: pointer; align-items: center; }
+.step-row:hover { background: #f0f5fa; }
 .step-row:last-child { border-bottom: none; }
+.stoggle { margin-left: auto; color: #aaa; font-size: 10px; flex-shrink: 0; padding-right: 2px; }
+.step-detail { display: none; font-size: 11px; color: #555; padding: 3px 6px 4px 62px;
+               border-bottom: 1px solid #e8eef4; background: #f5f9fd; line-height: 1.7; }
 .snum { color: #999; width: 58px; flex-shrink: 0; }
 .sbody { flex: 1; }
 .pos { color: #1a6a1a; }
@@ -297,6 +302,16 @@ function readSlots(tbodyId) {
     .filter(s => s.id && s.targetVal !== 0);
 }
 
+// ─── STEP TOGGLE ──────────────────────────────────────────────────────────────
+
+function toggleStep(row) {
+  const detail = row.nextElementSibling;
+  if (!detail || !detail.classList.contains('step-detail')) return;
+  const open = detail.style.display === 'block';
+  detail.style.display = open ? 'none' : 'block';
+  row.querySelector('.stoggle').textContent = open ? '▶' : '▼';
+}
+
 // ─── RENDER RESULT ────────────────────────────────────────────────────────────
 
 function rateClass(r) {
@@ -342,15 +357,31 @@ function renderResult(res, idx) {
       const cls  = d > 0 ? 'pos' : 'neg';
       changes.push(`<span class="${cls}">${STATS[id].name} ${sign}${d}</span>`);
     }
+    const stepMats = {};
     Object.entries(step.mats || {}).forEach(([mid, amt]) => {
-      totalMats[mid] = (totalMats[mid] || 0) + amt * step.repeat;
+      const total = amt * step.repeat;
+      totalMats[mid] = (totalMats[mid] || 0) + total;
+      stepMats[mid]  = total;
     });
     if (!changes.length) return;
     const rep = step.repeat > 1 ? `<span class="srep"> ×${step.repeat}</span>` : '';
-    stepsHtml += `<div class="step-row">
+
+    // detail line
+    const totalDelta  = (step.delta || 0) * step.repeat;
+    const potSign     = totalDelta >= 0 ? '+' : '';
+    const potColor    = totalDelta >= 0 ? '#1a6a1a' : '#aa2222';
+    const stepMatStr  = Object.entries(stepMats)
+      .map(([mid, a]) => `${MATERIAL[mid]}: ${a.toLocaleString()}`).join(', ') || '—';
+    const detail = `Δ Pot: <b style="color:${potColor}">${potSign}${totalDelta}</b>`
+      + (step.repeat > 1 ? ` (${potSign}${step.delta} × ${step.repeat})` : '')
+      + ` &nbsp;|&nbsp; Pot after: <b>${step.potAfter ?? '?'}</b>`
+      + ` &nbsp;|&nbsp; Mats: ${stepMatStr}`;
+
+    stepsHtml += `<div class="step-row" onclick="toggleStep(this)">
       <span class="snum">STEP #${si + 1}</span>
       <span class="sbody">${changes.join(', ')}${rep}</span>
-    </div>`;
+      <span class="stoggle">▶</span>
+    </div><div class="step-detail">${detail}</div>`;
     prevVals = [...step.vals];
   });
 
