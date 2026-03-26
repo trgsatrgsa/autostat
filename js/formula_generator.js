@@ -209,20 +209,22 @@ function calcPot(statId, startVal, endVal, penalty, equipType, matchElement) {
   return Math.floor(base * multiplier / 100000) * nega * penalty;
 }
 
-function calcMats(oldCtr, newCtr, statId, smithProf) {
+function calcMats(oldCtr, newCtr, statId, smithProf, extraReduction = 0) {
   const s = STATS[statId];
-  const reduction = Math.min(1, Math.max(0,
+  const smithReduction = Math.min(1, Math.max(0,
     (Math.floor(smithProf / 10) + Math.floor(smithProf / 50)) / 100
   ));
-  const modifier = 1 - reduction;
+  const modifier = Math.max(0, 1 - smithReduction - extraReduction);
+  const startCtr = Math.round(oldCtr);
+  const endCtr   = Math.round(newCtr);
   let total = 0;
-  if (oldCtr < newCtr)
-    for (let i = Math.floor(oldCtr); i < Math.floor(newCtr); i++) {
+  if (startCtr < endCtr)
+    for (let i = startCtr; i < endCtr; i++) {
       const m = Math.max(Math.abs(i), Math.abs(i + 1));
       total += Math.trunc(s.mat_base * m * m * modifier);
     }
-  else if (oldCtr > newCtr)
-    for (let i = Math.floor(oldCtr); i > Math.floor(newCtr); i--) {
+  else if (startCtr > endCtr)
+    for (let i = startCtr; i > endCtr; i--) {
       const m = Math.max(Math.abs(i), Math.abs(i - 1));
       total += Math.trunc(s.mat_base * m * m * modifier);
     }
@@ -302,7 +304,7 @@ function snapValue(val, statId, levelCap) {
 
 // state = { slotStats[8], vals[8], ctrs[8], pot, original }
 
-function applyStep(state, newSlotStats, newVals, equipType, matchElement, smithProf) {
+function applyStep(state, newSlotStats, newVals, equipType, matchElement, smithProf, matReductions = {}) {
   const newCtrs = newVals.map((v, i) => newSlotStats[i] ? valToCounter(v, newSlotStats[i]) : 0);
 
   let changed = false;
@@ -324,11 +326,9 @@ function applyStep(state, newSlotStats, newVals, equipType, matchElement, smithP
     deltaPotX100 += calcPot(id, oldV, newV, penalty, equipType, matchElement);
 
     if (newCtrs[i] !== state.ctrs[i]) {
-      const mat = calcMats(state.ctrs[i], newCtrs[i], id, smithProf);
-      if (mat > 0) {
-        const mid = STATS[id].mat_id;
-        matsPerType[mid] = (matsPerType[mid] || 0) + mat;
-      }
+      const mid = STATS[id].mat_id;
+      const mat = calcMats(state.ctrs[i], newCtrs[i], id, smithProf, matReductions[mid] || 0);
+      if (mat > 0) matsPerType[mid] = (matsPerType[mid] || 0) + mat;
     }
   }
 
@@ -352,10 +352,17 @@ function compressSteps(steps) {
     let repeat = 1;
     while (
       i + repeat < steps.length &&
+      steps[i].delta                     === steps[i + repeat].delta &&
       JSON.stringify(steps[i].deltas)    === JSON.stringify(steps[i + repeat].deltas) &&
       JSON.stringify(steps[i].slotStats) === JSON.stringify(steps[i + repeat].slotStats)
     ) repeat++;
-    result.push({ ...steps[i + repeat - 1], repeat });
+    const totalMats = {};
+    for (let j = i; j < i + repeat; j++) {
+      Object.entries(steps[j].mats || {}).forEach(([mid, amt]) => {
+        totalMats[mid] = (totalMats[mid] || 0) + amt;
+      });
+    }
+    result.push({ ...steps[i + repeat - 1], repeat, mats: totalMats });
     i += repeat;
   }
   return result;
@@ -364,7 +371,7 @@ function compressSteps(steps) {
 // ─── FORMULA GENERATOR ────────────────────────────────────────────────────────
 
 function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr,
-                     equipType, startPot, originalPot, smithProf, matchElement) {
+                     equipType, startPot, originalPot, smithProf, matchElement, matReductions) {
   let state = {
     slotStats: Array(8).fill(0),
     vals:      Array(8).fill(0),
@@ -380,7 +387,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
   for (let n = 0; n < splitN; n++) {
     const newVals = Array(8).fill(0);
     newVals[0] = counterToVal(n + 1, primary.id);
-    const r = applyStep(state, phase1Slots, newVals, equipType, matchElement, smithProf);
+    const r = applyStep(state, phase1Slots, newVals, equipType, matchElement, smithProf, matReductions);
     if (!r) continue;
     if (r.state.pot < 0) return null;
     rawSteps.push({ slotStats: [...phase1Slots], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
@@ -395,7 +402,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
     for (let i = 0; i < negative.length; i++)
       newVals[1 + others.length + i] = negative[i].targetVal;
 
-    const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf);
+    const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf, matReductions);
     if (r) {
       rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
       state = r.state;
@@ -406,7 +413,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
   for (let n = splitN; n < primaryMaxCtr; n++) {
     const newVals = [...state.vals];
     newVals[0] = counterToVal(n + 1, primary.id);
-    const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf);
+    const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf, matReductions);
     if (!r) continue;
     rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
     state = r.state;
@@ -417,7 +424,7 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
   finalVals[0] = primary.targetVal;
   for (let i = 0; i < others.length; i++) finalVals[1 + i] = others[i].targetVal;
 
-  const rf = applyStep(state, slotStats, finalVals, equipType, matchElement, smithProf);
+  const rf = applyStep(state, slotStats, finalVals, equipType, matchElement, smithProf, matReductions);
   if (rf) {
     rawSteps.push({ slotStats: [...slotStats], vals: [...finalVals], deltas: rf.deltas, mats: rf.mats, rate: rf.rate, delta: rf.delta, potAfter: rf.state.pot });
     state = rf.state;
@@ -429,11 +436,11 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
   const lastRate      = rawSteps[rawSteps.length - 1].rate;
   const totalConfirms = rawSteps.length;
 
-  return { splitN, steps: compressed, rate: lastRate, potRemaining: state.pot, totalConfirms };
+  return { splitN, steps: compressed, rawSteps, rate: lastRate, potRemaining: state.pot, totalConfirms, startPot };
 }
 
 // Main entry: tries all split points, returns ALL distinct rate results (best confirms per rate)
-function generateFormula(positive, negative, equipType, startPot, originalPot, smithProf, matchElement) {
+function generateFormula(positive, negative, equipType, startPot, originalPot, smithProf, matchElement, matReductions = {}) {
   if (!positive.length) return [];
 
   const sorted  = [...positive].sort((a, b) => STATS[a.id].pot - STATS[b.id].pot);
@@ -457,7 +464,7 @@ function generateFormula(positive, negative, equipType, startPot, originalPot, s
 
   for (let splitN = primaryMaxCtr; splitN >= 0; splitN--) {
     const r = tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr,
-                          equipType, startPot, originalPot, smithProf, matchElement);
+                          equipType, startPot, originalPot, smithProf, matchElement, matReductions);
     if (!r) continue;
     const existing = byRate.get(r.rate);
     if (!existing || r.totalConfirms < existing.totalConfirms) {

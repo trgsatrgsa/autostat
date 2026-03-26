@@ -122,6 +122,43 @@ body.dark .neg { color: #e06060; }
 .err { color: #e05050; font-size: 12px; padding: 6px; }
 .hint { font-size: 11px; color: var(--fg-hint); margin: 2px 0 5px; }
 .level-required { border-color: #c00 !important; background: #fff0f0 !important; }
+.mat-red-grid { display: grid; grid-template-columns: 1fr auto 1fr auto; gap: 3px 8px; align-items: center;
+                font-size: 11px; color: var(--fg-dim); margin-bottom: 3px; }
+.mat-red-grid select { padding: 2px 4px; border: 1px solid var(--border-md); border-radius: 3px;
+                       font-family: monospace; font-size: 12px;
+                       background: var(--bg-val); color: var(--fg); }
+
+/* Stepper panel */
+#stepper-panel {
+  display: none; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  background: var(--bg-panel); border-top: 2px solid var(--gen-bg);
+  box-shadow: 0 -4px 20px rgba(0,0,0,.18);
+  flex-direction: column; padding: 12px 16px 14px; gap: 10px;
+}
+#stepper-top { display: flex; align-items: center; gap: 10px; }
+#stepper-counter { font-size: 12px; color: var(--fg-hint); flex: 1; text-align: center; }
+#stepper-close { background: none; border: none; font-size: 18px; cursor: pointer;
+                 color: var(--fg-hint); line-height: 1; padding: 0 4px; }
+#stepper-close:hover { color: var(--fg); }
+#stepper-content { font-size: 14px; line-height: 2; padding: 4px 0; min-height: 60px; }
+#stepper-nav { display: flex; gap: 10px; }
+.snav-btn {
+  flex: 1; padding: 9px; font-size: 14px; font-weight: bold; cursor: pointer;
+  border: 1px solid var(--border-md); border-radius: 4px;
+  background: var(--bg-btn); color: var(--fg-btn);
+}
+.snav-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.snav-btn:disabled { opacity: .35; cursor: default; }
+.stp-cols { display: flex; gap: 16px; align-items: flex-start; }
+.stp-col { flex: 1; }
+.stp-do { border-left: 2px solid var(--border); border-right: 2px solid var(--border); padding: 0 14px; }
+.stp-lbl { font-size: 10px; text-transform: uppercase; letter-spacing: .5px;
+           color: var(--fg-hint); margin-bottom: 5px; }
+.stp-btn {
+  font-size: 11px; padding: 2px 9px; cursor: pointer; margin-left: auto;
+  background: var(--gen-bg); color: #fff; border: none; border-radius: 3px;
+}
+.stp-btn:hover { background: var(--gen-hov); }
 
 /* Mobile */
 @media (max-width: 700px) {
@@ -143,7 +180,27 @@ body.dark .neg { color: #e06060; }
   <div class="row"><label>Base Level</label>
     <input type="number" id="baselevel" placeholder="e.g. 315" min="10" max="400" oninput="updateAllRanges()"></div>
   <div class="row"><label>Smith Proficiency</label>
-    <input type="number" id="smithprof" placeholder="e.g. 100" min="0" max="300"></div>
+    <input type="number" id="smithprof" placeholder="e.g. 100" min="0" max="300" oninput="updateMatReductionInfo()"></div>
+
+  <div class="sec">Material Reduction
+    <span id="mat-red-total" style="font-size:11px;font-weight:normal;margin-left:8px;color:var(--fg-hint)"></span>
+  </div>
+  <div class="hint">Anvil skills — 1% per level each (max 10 each = 40% total)</div>
+  <div class="mat-red-grid" id="anvil-grid">
+    <span>Craftsman's</span><select id="anvil1" onchange="updateMatReductionInfo()"></select>
+    <span>Blacksmith's</span><select id="anvil2" onchange="updateMatReductionInfo()"></select>
+    <span>Master's</span><select id="anvil3" onchange="updateMatReductionInfo()"></select>
+    <span>Master's II</span><select id="anvil4" onchange="updateMatReductionInfo()"></select>
+  </div>
+  <div class="hint" style="margin-top:5px">Compassion — 1% per level per material type</div>
+  <div class="mat-red-grid" id="comp-grid">
+    <span>Beast</span><select id="comp1" onchange="updateMatReductionInfo()"></select>
+    <span>Wood</span><select id="comp2" onchange="updateMatReductionInfo()"></select>
+    <span>Metal</span><select id="comp3" onchange="updateMatReductionInfo()"></select>
+    <span>Cloth</span><select id="comp4" onchange="updateMatReductionInfo()"></select>
+    <span>Medicine</span><select id="comp5" onchange="updateMatReductionInfo()"></select>
+    <span>Mana</span><select id="comp6" onchange="updateMatReductionInfo()"></select>
+  </div>
 
   <div class="sec">Equipment</div>
   <div class="row"><label>Type</label>
@@ -169,13 +226,18 @@ body.dark .neg { color: #e06060; }
     </select>
   </div>
 
-  <div class="row"><label>Original Pot</label>
-    <input type="number" id="original-pot" placeholder="class base" min="1" max="999" oninput="onOriginalPotChange()"></div>
-  <div class="hint">Class base potential — auto-filled by garb selection. Anchors the success rate formula.</div>
+  <div class="row">
+    <label>Garb Pot</label>
+    <input type="number" id="start-pot" placeholder="pot shown on garb" min="1" max="999" oninput="onStartPotChange()">
+    <span id="manual-toggle" onclick="toggleManualPot()"
+          style="font-size:11px;color:var(--fg-hint);cursor:pointer;white-space:nowrap;text-decoration:underline">Manual</span>
+  </div>
 
-  <div class="row"><label>Starting Pot</label>
-    <input type="number" id="start-pot" placeholder="actual on your garb" min="1" max="999" oninput="onStartPotChange()"></div>
-  <div class="hint">Actual pot shown on your garb. If bought from a high-VIT crafter, enter the higher number here. Usually same as Original Pot.</div>
+  <div id="manual-pot-row" style="display:none">
+    <div class="row"><label>Original Pot</label>
+      <input type="number" id="original-pot" placeholder="class base" min="1" max="999" oninput="onOriginalPotChange()"></div>
+    <div class="hint">Advanced: class base pot used to anchor success rate. Only change if you know what this is.</div>
+  </div>
 
   <div class="info" id="pot-info"></div>
 
@@ -219,6 +281,14 @@ function toggleDark() {
 const STAT_OPTS = '<option value="0">— none —</option>' +
   Object.values(STATS).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
 
+// ─── SKILL LEVEL DROPDOWNS INIT ───────────────────────────────────────────────
+(function initSkillDropdowns() {
+  const opts = Array.from({length: 11}, (_, i) => `<option value="${i}"${i===10?' selected':''}>${i}</option>`).join('');
+  ['anvil1','anvil2','anvil3','anvil4','comp1','comp2','comp3','comp4','comp5','comp6']
+    .forEach(id => document.getElementById(id).innerHTML = opts);
+  updateMatReductionInfo();
+})();
+
 // ─── GARB DROPDOWN INIT ───────────────────────────────────────────────────────
 
 (function initGarbs() {
@@ -229,9 +299,33 @@ const STAT_OPTS = '<option value="0">— none —</option>' +
     opt.textContent = `${g.name} (pot ${g.pot})`;
     sel.appendChild(opt);
   });
+  // default to Adventurer's Garb (pot 15)
+  const adv = GARBS.find(g => g.pot === 15);
+  if (adv) {
+    sel.value = adv.pot;
+    onGarbChange();
+  }
 })();
 
 // ─── UI HELPERS ───────────────────────────────────────────────────────────────
+
+// mat_id → 1=Beast 2=Wood 3=Metal 4=Cloth 5=Medicine 6=Mana
+function getMatReductions() {
+  const anvil = [1,2,3,4].reduce((s,i) => s + (+document.getElementById('anvil'+i).value||0), 0) / 100;
+  const comp   = [1,2,3,4,5,6].map(i => (+document.getElementById('comp'+i).value||0) / 100);
+  // comp[0]=Beast(mat1), comp[1]=Wood(mat2), comp[2]=Metal(mat3), comp[3]=Cloth(mat4), comp[4]=Med(mat5), comp[5]=Mana(mat6)
+  const result = {};
+  for (let mid = 1; mid <= 6; mid++) result[mid] = anvil + comp[mid - 1];
+  return result;
+}
+
+function updateMatReductionInfo() {
+  const smithProf = +document.getElementById('smithprof').value || 0;
+  const smithRed  = (Math.floor(smithProf / 10) + Math.floor(smithProf / 50));
+  const anvil     = [1,2,3,4].reduce((s,i) => s + (+document.getElementById('anvil'+i).value||0), 0);
+  const el = document.getElementById('mat-red-total');
+  if (el) el.textContent = `Smith ${smithRed}% + Anvil ${anvil}% + Compassion (per type)`;
+}
 
 function updatePotInfo() {
   const orig  = +document.getElementById('original-pot').value || 0;
@@ -255,21 +349,32 @@ function onGarbChange() {
   if (!v) return;
   const op = document.getElementById('original-pot');
   const sp = document.getElementById('start-pot');
-  const prevOrig = op.value;
   op.value = v;
-  // sync start-pot only if it was empty or matched the old original
-  if (!sp.value || sp.value === prevOrig) sp.value = v;
+  sp.value = v;
   updatePotInfo();
 }
 
 function onOriginalPotChange() {
-  document.getElementById('garb-select').value = '';
   updatePotInfo();
 }
 
 function onStartPotChange() {
-  document.getElementById('garb-select').value = '';
+  // if manual row hidden, keep original-pot in sync with start-pot
+  if (document.getElementById('manual-pot-row').style.display === 'none') {
+    document.getElementById('original-pot').value = document.getElementById('start-pot').value;
+  }
   updatePotInfo();
+}
+
+function toggleManualPot() {
+  const row = document.getElementById('manual-pot-row');
+  const tog = document.getElementById('manual-toggle');
+  const show = row.style.display === 'none';
+  row.style.display = show ? '' : 'none';
+  tog.textContent = show ? 'Simple' : 'Manual';
+  if (show && !document.getElementById('original-pot').value) {
+    document.getElementById('original-pot').value = document.getElementById('start-pot').value;
+  }
 }
 
 // ─── SLOT MANAGEMENT ──────────────────────────────────────────────────────────
@@ -455,9 +560,10 @@ function renderResult(res, idx) {
   const rc = rateClass(res.rate);
   const bc = badgeClass(res.rate);
 
-  let prevVals  = Array(8).fill(0);
-  let stepsHtml = '';
-  const totalMats = {};
+  let prevVals     = Array(8).fill(0);
+  let prevPotAfter = res.startPot ?? 0;
+  let stepsHtml    = '';
+  const totalMats  = {};
 
   res.steps.forEach((step, si) => {
     const changes = [];
@@ -473,15 +579,14 @@ function renderResult(res, idx) {
     }
     const stepMats = {};
     Object.entries(step.mats || {}).forEach(([mid, amt]) => {
-      const total = amt * step.repeat;
-      totalMats[mid] = (totalMats[mid] || 0) + total;
-      stepMats[mid]  = total;
+      totalMats[mid] = (totalMats[mid] || 0) + amt;
+      stepMats[mid]  = amt;
     });
     if (!changes.length) return;
     const rep = step.repeat > 1 ? `<span class="srep"> ×${step.repeat}</span>` : '';
 
-    // detail line
-    const totalDelta  = (step.delta || 0) * step.repeat;
+    // detail line — use exact pot diff, not delta×repeat (delta can change mid-group at soft limit)
+    const totalDelta  = (step.potAfter ?? prevPotAfter) - prevPotAfter;
     const potSign     = totalDelta >= 0 ? '+' : '';
     const potColor    = totalDelta >= 0 ? '#1a6a1a' : '#aa2222';
     const stepMatStr  = Object.entries(stepMats)
@@ -497,7 +602,6 @@ function renderResult(res, idx) {
     }
     const detail = slotLines.map(l => `<div>${l}</div>`).join('')
       + `<div style="margin-top:3px">Δ Pot: <b style="color:${potColor}">${potSign}${totalDelta}</b>`
-      + (step.repeat > 1 ? ` (${potSign}${step.delta} × ${step.repeat})` : '')
       + ` &nbsp;|&nbsp; Pot after: <b>${step.potAfter ?? '?'}</b>`
       + ` &nbsp;|&nbsp; Mats: ${stepMatStr}</div>`;
 
@@ -506,39 +610,152 @@ function renderResult(res, idx) {
       <span class="sbody">${changes.join(', ')}${rep}</span>
       <span class="stoggle">▶</span>
     </div><div class="step-detail">${detail}</div>`;
-    prevVals = [...step.vals];
+    prevVals     = [...step.vals];
+    prevPotAfter = step.potAfter ?? prevPotAfter;
   });
 
   const matsStr = Object.entries(totalMats)
     .map(([mid, amt]) => `${MATERIAL[mid]}: ${amt.toLocaleString()}`)
     .join(' | ') || 'None';
 
-  return `<div class="r-block ${rc}">
+  _resultData[idx] = res;
+
+  return `<div class="r-block ${rc}" data-idx="${idx}">
     <div class="r-head">
       <span class="badge ${bc}">${rateLabel(res.rate)}</span>
-      <span style="font-size:11px;color:#666">${res.totalConfirms} confirms · split N=${res.splitN} · pot left: ${res.potRemaining}</span>
+      <span style="font-size:11px;color:var(--fg-hint)">${res.totalConfirms} confirms · split N=${res.splitN} · pot left: ${res.potRemaining}</span>
+      <button class="stp-btn" onclick="openStepper(this)">▶ Step Through</button>
     </div>
     ${stepsHtml}
     <div class="mat-row">Materials: ${matsStr}</div>
   </div>`;
 }
 
+// ─── STEPPER ──────────────────────────────────────────────────────────────────
+const _resultData = [];
+let _stepperItems = [];
+let _stepperCur   = 0;
+
+function openStepper(btn) {
+  const block = btn.closest('.r-block');
+  const res   = _resultData[+block.dataset.idx];
+  _stepperItems = [];
+
+  // Build compressed-step group labels (STEP #N · confirm M of K)
+  const groupMap = [];
+  (res.steps || []).forEach((cs, si) => {
+    for (let r = 0; r < (cs.repeat || 1); r++) groupMap.push({ stepIdx: si, r, total: cs.repeat || 1 });
+  });
+
+  let prevVals     = Array(8).fill(0);
+  let prevPotAfter = res.startPot ?? 0;
+
+  (res.rawSteps || res.steps).forEach((raw, ri) => {
+    const { stepIdx, r, total } = groupMap[ri] || { stepIdx: ri, r: 0, total: 1 };
+    _stepperItems.push({
+      raw,
+      stepIdx, r, total,
+      valsBefore:  [...prevVals],
+      valsAfter:   [...raw.vals],
+      potBefore:   prevPotAfter,
+      potAfter:    raw.potAfter ?? prevPotAfter
+    });
+    prevVals     = [...raw.vals];
+    prevPotAfter = raw.potAfter ?? prevPotAfter;
+  });
+
+  _stepperCur = 0;
+  refreshStepper();
+  document.getElementById('stepper-panel').style.display = 'flex';
+}
+
+function stepperNav(dir) {
+  _stepperCur = Math.max(0, Math.min(_stepperItems.length - 1, _stepperCur + dir));
+  refreshStepper();
+}
+
+function closeStepper() {
+  document.getElementById('stepper-panel').style.display = 'none';
+}
+
+function refreshStepper() {
+  const { raw, stepIdx, r, total, valsBefore, valsAfter, potBefore, potAfter } = _stepperItems[_stepperCur];
+  const n   = _stepperCur + 1;
+  const tot = _stepperItems.length;
+
+  function slotTable(vals, label, pot) {
+    const rows = [];
+    for (let i = 0; i < 8; i++) {
+      const id = raw.slotStats[i];
+      if (!id) continue;
+      const v = vals[i];
+      if (!v) continue;
+      const cls = v > 0 ? 'pos' : 'neg';
+      rows.push(`<tr><td style="color:var(--fg-hint);padding-right:8px;white-space:nowrap">${STATS[id].name}</td><td class="${cls}" style="font-weight:bold">${v > 0 ? '+' : ''}${v}</td></tr>`);
+    }
+    if (!rows.length) rows.push(`<tr><td colspan="2" style="color:var(--fg-hint);font-style:italic">empty</td></tr>`);
+    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:11px;color:var(--fg-hint);border-top:1px solid var(--border-lt)">Pot: <b style="color:var(--fg)">${pot}</b></td></tr>`);
+    return `<div class="stp-col"><div class="stp-lbl">${label}</div><table style="border-collapse:collapse;font-size:13px">${rows.join('')}</table></div>`;
+  }
+
+  function doTable() {
+    const rows = [];
+    for (let i = 0; i < 8; i++) {
+      const id = raw.slotStats[i];
+      if (!id) continue;
+      const d = valsAfter[i] - valsBefore[i];
+      if (!d) continue;
+      const cls = d > 0 ? 'pos' : 'neg';
+      rows.push(`<tr><td style="color:var(--fg-hint);padding-right:8px;white-space:nowrap">${STATS[id].name}</td><td class="${cls}" style="font-weight:bold;font-size:15px">${d > 0 ? '+' : ''}${d}</td></tr>`);
+    }
+    const delta   = raw.delta || 0;
+    const potSign = delta >= 0 ? '+' : '';
+    const potCol  = delta >= 0 ? '#5abf5a' : '#e06060';
+    const matStr  = Object.entries(raw.mats || {})
+      .map(([mid, a]) => `${MATERIAL[mid]}: ${(+a).toLocaleString()}`).join('<br>') || '—';
+    rows.push(`<tr><td colspan="2" style="padding-top:6px;font-size:11px;color:var(--fg-dim)">Pot <b style="color:${potCol}">${potSign}${delta}</b></td></tr>`);
+    rows.push(`<tr><td colspan="2" style="font-size:11px;color:var(--fg-dim)">${matStr}</td></tr>`);
+    return `<div class="stp-col stp-do"><div class="stp-lbl">What you do</div><table style="border-collapse:collapse;font-size:13px">${rows.join('')}</table></div>`;
+  }
+
+  document.getElementById('stepper-content').innerHTML =
+    `<div style="font-size:11px;color:var(--fg-hint);margin-bottom:8px">` +
+      `STEP #${stepIdx + 1}` +
+      (total > 1 ? `  &nbsp;·&nbsp;  confirm ${r + 1} of ${total}` : '') +
+    `</div>` +
+    `<div class="stp-cols">` +
+      slotTable(valsBefore, 'What you have', potBefore) +
+      doTable() +
+      slotTable(valsAfter,  'What you get',  potAfter) +
+    `</div>`;
+
+  document.getElementById('stepper-counter').textContent = `Confirm ${n} / ${tot}`;
+  document.getElementById('stepper-prev').disabled = _stepperCur === 0;
+  document.getElementById('stepper-next').disabled = _stepperCur === tot - 1;
+}
+
 // ─── GENERATE ─────────────────────────────────────────────────────────────────
 
 function generate() {
+  closeStepper();
   const area      = document.getElementById('result-area');
   const levelEl    = document.getElementById('baselevel');
   const smithEl    = document.getElementById('smithprof');
   const origPotEl  = document.getElementById('original-pot');
   const startPotEl = document.getElementById('start-pot');
 
+  // ensure original-pot mirrors start-pot when manual row is hidden
+  if (document.getElementById('manual-pot-row').style.display === 'none') {
+    origPotEl.value = startPotEl.value;
+  }
+
   let bad = false;
-  [[levelEl, +levelEl.value < 10], [smithEl, false], [origPotEl, false], [startPotEl, false]].forEach(([el, extra]) => {
+  [[levelEl, +levelEl.value < 10], [smithEl, false], [startPotEl, false]].forEach(([el, extra]) => {
     if (el.value === '' || extra) { el.classList.add('level-required'); bad = true; }
     else el.classList.remove('level-required');
   });
   if (bad) {
-    area.innerHTML = '<div class="err">Fill in Base Level (min 10), Smith Proficiency, Original Pot, and Starting Pot first.</div>';
+    area.innerHTML = '<div class="err">Fill in Base Level (min 10), Smith Proficiency, and Garb Pot first.</div>';
     return;
   }
 
@@ -573,7 +790,7 @@ function generate() {
     }
   }
 
-  const results = generateFormula(positive, negative, equipType, startPot, basePot, smithProf, matchElem);
+  const results = generateFormula(positive, negative, equipType, startPot, basePot, smithProf, matchElem, getMatReductions());
 
   if (!results.length) {
     area.innerHTML = '<div class="err">No valid formula found. Try adjusting stats or potential.</div>';
@@ -611,5 +828,18 @@ function generate() {
   updateAllRanges();
 })();
 </script>
+<!-- Stepper panel -->
+<div id="stepper-panel">
+  <div id="stepper-top">
+    <span style="font-size:12px;font-weight:bold;color:var(--fg-sec)">Step-Through</span>
+    <span id="stepper-counter"></span>
+    <button id="stepper-close" onclick="closeStepper()" title="Close">✕</button>
+  </div>
+  <div id="stepper-content"></div>
+  <div id="stepper-nav">
+    <button class="snav-btn" id="stepper-prev" onclick="stepperNav(-1)">◀ Back</button>
+    <button class="snav-btn" id="stepper-next" onclick="stepperNav(1)">Next ▶</button>
+  </div>
+</div>
 </body>
 </html>
