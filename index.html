@@ -5,61 +5,95 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Toram Formula Auto Generator</title>
 <style>
+:root {
+  --bg-page:   #f0f2f5; --bg-panel:  #fff;     --bg-header: #1a3a5c;
+  --bg-info:   #f5f7fa; --bg-th:     #edf2f7;  --bg-btn:    #dbe8f5;
+  --bg-val:    #fafafa; --bg-step:   #f0f5fa;  --bg-detail: #f5f9fd;
+  --bg-negrow: #fff5f5;
+  --fg:        #222;    --fg-dim:    #555;      --fg-hint:   #999;
+  --fg-sec:    #1a3a5c; --fg-btn:    #1a3a5c;
+  --border:    #ccc;    --border-md: #bbb;      --border-lt: #ddd;
+  --border-info:#dde;   --border-det:#e8eef4;   --btn-bdr:   #aac;
+  --gen-bg:    #1a3a5c; --gen-hov:   #265080;
+}
+body.dark {
+  --bg-page:   #1a1d23; --bg-panel:  #252932;  --bg-header: #111620;
+  --bg-info:   #1e2229; --bg-th:     #1e2530;  --bg-btn:    #2a3545;
+  --bg-val:    #1e2229; --bg-step:   #2a3040;  --bg-detail: #1e2630;
+  --bg-negrow: #2d1f1f;
+  --fg:        #d4d8e0; --fg-dim:    #9aa0ad;  --fg-hint:   #6a7080;
+  --fg-sec:    #7aacdc; --fg-btn:    #7aacdc;
+  --border:    #3a3f4a; --border-md: #3a3f4a;  --border-lt: #2e3340;
+  --border-info:#303540;--border-det:#2e3845;  --btn-bdr:   #3a5070;
+  --gen-bg:    #1e4070; --gen-hov:   #2a5590;
+}
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: monospace; font-size: 13px; background: #f0f2f5; color: #222; }
-h1 { font-size: 15px; padding: 10px 16px; background: #1a3a5c; color: #fff; }
+body { font-family: monospace; font-size: 13px; background: var(--bg-page); color: var(--fg); }
+h1 { font-size: 15px; padding: 10px 16px; background: var(--bg-header); color: #fff;
+     display: flex; align-items: center; justify-content: space-between; }
+#dark-toggle { font-size: 11px; padding: 3px 10px; cursor: pointer; border: 1px solid #aaa;
+               border-radius: 3px; background: transparent; color: #ddd; }
+#dark-toggle:hover { background: rgba(255,255,255,.15); }
 .wrap { display: flex; gap: 14px; padding: 14px; max-width: 1100px; }
-.panel { background: #fff; border: 1px solid #ccc; border-radius: 4px; padding: 12px; }
+.panel { background: var(--bg-panel); border: 1px solid var(--border); border-radius: 4px; padding: 12px; }
 .inputs { width: 330px; flex-shrink: 0; }
 .results { flex: 1; min-width: 0; }
 
-.sec { font-weight: bold; color: #1a3a5c; border-bottom: 1px solid #ddd;
+.sec { font-weight: bold; color: var(--fg-sec); border-bottom: 1px solid var(--border-lt);
        padding-bottom: 3px; margin: 10px 0 7px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
 .sec:first-child { margin-top: 0; }
 
-.row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; }
-.row label { width: 120px; flex-shrink: 0; color: #555; font-size: 12px; }
-.row input[type=number], .row select { flex: 1; padding: 3px 5px; border: 1px solid #bbb;
-  border-radius: 3px; font-family: monospace; font-size: 12px; }
+.row { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; min-width: 0; }
+.row label { width: 120px; flex-shrink: 0; color: var(--fg-dim); font-size: 12px; }
+.row input[type=number], .row select { flex: 1; min-width: 0; padding: 3px 5px; border: 1px solid var(--border-md);
+  border-radius: 3px; font-family: monospace; font-size: 12px;
+  background: var(--bg-val); color: var(--fg); }
 
-.info { font-size: 11px; color: #666; background: #f5f7fa; border: 1px solid #dde;
+.info { font-size: 11px; color: var(--fg-dim); background: var(--bg-info); border: 1px solid var(--border-info);
         padding: 4px 7px; border-radius: 3px; margin-bottom: 6px; }
 
 table.slots { width: 100%; border-collapse: collapse; margin-bottom: 5px; }
-table.slots th { background: #edf2f7; padding: 2px 5px; border: 1px solid #ccc; font-size: 11px; }
-table.slots td { padding: 2px 3px; border: 1px solid #ddd; }
-table.slots td select { width: 100%; font-size: 11px; border: none; background: transparent; }
+table.slots th { background: var(--bg-th); padding: 2px 5px; border: 1px solid var(--border); font-size: 11px; color: var(--fg-dim); }
+table.slots td { padding: 2px 3px; border: 1px solid var(--border-lt); }
+table.slots td select { width: 100%; font-size: 11px; border: none; background: transparent; color: var(--fg); }
 /* val control */
 .val-ctrl { display: flex; align-items: center; gap: 2px; }
 .val-btn {
   display: inline-flex; align-items: center; justify-content: center;
   min-width: 22px; height: 22px; padding: 0 4px;
-  background: #dbe8f5; border: 1px solid #aac; border-radius: 3px;
+  background: var(--bg-btn); border: 1px solid var(--btn-bdr); border-radius: 3px;
   cursor: pointer; font-size: 12px; font-weight: bold; user-select: none; flex-shrink: 0;
-  color: #1a3a5c;
+  color: var(--fg-btn);
 }
-.val-btn:hover { background: #b8d4ee; }
-.val-btn:active { background: #9ac0e8; }
+.val-btn:hover { filter: brightness(1.1); }
+.val-btn:active { filter: brightness(.9); }
 .val-display {
-  width: 46px; text-align: center; border: 1px solid #ccc;
+  width: 46px; text-align: center; border: 1px solid var(--border);
   font-family: monospace; font-size: 12px; padding: 2px 3px;
-  border-radius: 2px; background: #fafafa; color: #222;
+  border-radius: 2px; background: var(--bg-val); color: var(--fg);
 }
-.val-display.is-neg { color: #aa2222; }
-table.slots tr.neg-row td { background: #fff5f5; }
+.val-display.is-neg { color: #cc3333; }
+table.slots tr.neg-row td { background: var(--bg-negrow); }
 
-button.add-btn { font-size: 11px; padding: 2px 8px; cursor: pointer; margin-bottom: 6px; }
-button#gen { width: 100%; padding: 8px; background: #1a3a5c; color: #fff; border: none;
+button.add-btn { font-size: 11px; padding: 2px 8px; cursor: pointer; margin-bottom: 6px;
+                 background: var(--bg-btn); border: 1px solid var(--btn-bdr); color: var(--fg-btn); border-radius: 3px; }
+button#gen { width: 100%; padding: 8px; background: var(--gen-bg); color: #fff; border: none;
              border-radius: 3px; cursor: pointer; font-size: 13px; font-weight: bold; margin-top: 8px; }
-button#gen:hover { background: #265080; }
+button#gen:hover { background: var(--gen-hov); }
 
 /* Results */
-.r-block { border: 1px solid #bbb; border-radius: 4px; padding: 9px 10px; margin-bottom: 8px; }
+.r-block { border: 1px solid var(--border-md); border-radius: 4px; padding: 9px 10px; margin-bottom: 8px; }
 .r-block.r100  { border-color: #2a7a2a; background: #f0faf0; }
 .r-block.r90   { border-color: #7a6a00; background: #fdfaf0; }
 .r-block.r70   { border-color: #8a5000; background: #fdf8f0; }
 .r-block.rlow  { border-color: #9a2a00; background: #fdf5f0; }
 .r-block.rzero { border-color: #888;    background: #f7f7f7; }
+body.dark .r-block.r100  { border-color: #2a6a2a; background: #1a2e1a; }
+body.dark .r-block.r90   { border-color: #6a5a00; background: #282510; }
+body.dark .r-block.r70   { border-color: #7a4000; background: #271e10; }
+body.dark .r-block.rlow  { border-color: #7a2000; background: #271510; }
+body.dark .r-block.rzero { border-color: #555;    background: #1e2229; }
 
 .r-head { font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; }
@@ -69,27 +103,37 @@ button#gen:hover { background: #265080; }
 .badge.blow  { background: #f8d7da; color: #721c24; }
 .badge.bzero { background: #e8e8e8; color: #555; }
 
-.step-row { padding: 3px 0; border-bottom: 1px solid #eee; display: flex; gap: 6px; font-size: 12px;
+.step-row { padding: 3px 0; border-bottom: 1px solid var(--border-lt); display: flex; gap: 6px; font-size: 12px;
             cursor: pointer; align-items: center; }
-.step-row:hover { background: #f0f5fa; }
+.step-row:hover { background: var(--bg-step); }
 .step-row:last-child { border-bottom: none; }
 .stoggle { margin-left: auto; color: #aaa; font-size: 10px; flex-shrink: 0; padding-right: 2px; }
-.step-detail { display: none; font-size: 11px; color: #555; padding: 3px 6px 4px 62px;
-               border-bottom: 1px solid #e8eef4; background: #f5f9fd; line-height: 1.7; }
-.snum { color: #999; width: 58px; flex-shrink: 0; }
+.step-detail { display: none; font-size: 11px; color: var(--fg-dim); padding: 3px 6px 4px 62px;
+               border-bottom: 1px solid var(--border-det); background: var(--bg-detail); line-height: 1.7; }
+.snum { color: var(--fg-hint); width: 58px; flex-shrink: 0; }
 .sbody { flex: 1; }
-.pos { color: #1a6a1a; }
-.neg { color: #aa2222; }
-.srep { color: #888; font-size: 11px; }
-.mat-row { font-size: 11px; color: #666; margin-top: 5px; padding-top: 4px; border-top: 1px dashed #ddd; }
-.sum-row { font-size: 11px; color: #444; margin-top: 3px; }
-.err { color: #c00; font-size: 12px; padding: 6px; }
-.hint { font-size: 11px; color: #999; margin: 2px 0 5px; }
+.pos { color: #1a7a1a; }
+.neg { color: #cc3333; }
+body.dark .pos { color: #5abf5a; }
+body.dark .neg { color: #e06060; }
+.srep { color: var(--fg-hint); font-size: 11px; }
+.mat-row { font-size: 11px; color: var(--fg-dim); margin-top: 5px; padding-top: 4px; border-top: 1px dashed var(--border-lt); }
+.sum-row { font-size: 11px; color: var(--fg-dim); margin-top: 3px; }
+.err { color: #e05050; font-size: 12px; padding: 6px; }
+.hint { font-size: 11px; color: var(--fg-hint); margin: 2px 0 5px; }
 .level-required { border-color: #c00 !important; background: #fff0f0 !important; }
+
+/* Mobile */
+@media (max-width: 700px) {
+  .wrap { flex-direction: column; padding: 8px; gap: 8px; }
+  .inputs { width: 100%; }
+}
 </style>
 </head>
 <body>
-<h1>Toram Online — Formula Auto Generator</h1>
+<h1>Toram Online — Formula Auto Generator
+  <button id="dark-toggle" onclick="toggleDark()">Dark</button>
+</h1>
 <div class="wrap">
 
 <!-- ── INPUTS ─────────────────────────────────────────────── -->
@@ -163,6 +207,13 @@ button#gen:hover { background: #265080; }
 
 <script src="js/formula_generator.js"></script>
 <script>
+function toggleDark() {
+  const on = document.body.classList.toggle('dark');
+  document.getElementById('dark-toggle').textContent = on ? 'Light' : 'Dark';
+  localStorage.setItem('theme', on ? 'dark' : '');
+}
+(function(){ if (localStorage.getItem('theme') === 'dark') { document.body.classList.add('dark'); document.getElementById('dark-toggle').textContent = 'Light'; } })();
+
 // ─── STAT OPTION HTML ─────────────────────────────────────────────────────────
 
 const STAT_OPTS = '<option value="0">— none —</option>' +
