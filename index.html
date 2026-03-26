@@ -435,10 +435,20 @@ function renderResult(res, idx) {
     const potColor    = totalDelta >= 0 ? '#1a6a1a' : '#aa2222';
     const stepMatStr  = Object.entries(stepMats)
       .map(([mid, a]) => `${MATERIAL[mid]}: ${a.toLocaleString()}`).join(', ') || '—';
-    const detail = `Δ Pot: <b style="color:${potColor}">${potSign}${totalDelta}</b>`
+    const slotLines = [];
+    for (let i = 0; i < 8; i++) {
+      const id = step.slotStats[i];
+      if (!id) continue;
+      const v = step.vals[i];
+      const sign = v >= 0 ? '+' : '';
+      const cls  = v >= 0 ? 'pos' : 'neg';
+      slotLines.push(`<span class="${cls}">${STATS[id].name} ${sign}${v}</span>`);
+    }
+    const detail = slotLines.map(l => `<div>${l}</div>`).join('')
+      + `<div style="margin-top:3px">Δ Pot: <b style="color:${potColor}">${potSign}${totalDelta}</b>`
       + (step.repeat > 1 ? ` (${potSign}${step.delta} × ${step.repeat})` : '')
       + ` &nbsp;|&nbsp; Pot after: <b>${step.potAfter ?? '?'}</b>`
-      + ` &nbsp;|&nbsp; Mats: ${stepMatStr}`;
+      + ` &nbsp;|&nbsp; Mats: ${stepMatStr}</div>`;
 
     stepsHtml += `<div class="step-row" onclick="toggleStep(this)">
       <span class="snum">STEP #${si + 1}</span>
