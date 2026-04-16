@@ -214,7 +214,8 @@ function calcMats(oldCtr, newCtr, statId, smithProf, extraReduction = 0) {
   const smithReduction = Math.min(1, Math.max(0,
     (Math.floor(smithProf / 10) + Math.floor(smithProf / 50)) / 100
   ));
-  const modifier = Math.max(0, 1 - smithReduction - extraReduction);
+  // Multiplicative stacking: (1 - smith) × (1 - extra). Game compounds reductions.
+  const modifier = Math.max(0, (1 - smithReduction) * (1 - extraReduction));
   const startCtr = Math.round(oldCtr);
   const endCtr   = Math.round(newCtr);
   let total = 0;
@@ -439,6 +440,173 @@ function tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr
   return { splitN, steps: compressed, rawSteps, rate: lastRate, potRemaining: state.pot, totalConfirms, startPot };
 }
 
+// Pure 2-stage: negatives alone (low penalty) → all positives at once.
+// Trades "more negative return" (high penalty from full slots) for
+// "higher pot_before on the final confirm" (→ larger SR divisor).
+// Prepended with a primary +1 step so the "preserve first trait on fail"
+// skill (Compassion) has something to lock in before any risky confirm.
+function try2Stage(primary, others, negative, slotStats, equipType,
+                   startPot, originalPot, smithProf, matchElement, matReductions) {
+  if (!negative.length) return null;
+
+  let state = {
+    slotStats: Array(8).fill(0),
+    vals:      Array(8).fill(0),
+    ctrs:      Array(8).fill(0),
+    pot:       startPot,
+    original:  originalPot
+  };
+
+  const rawSteps = [];
+  const negStart = 1 + others.length;  // where negatives live in slotStats
+
+  // Stage 0: primary +1 in isolation (locks in primary trait before risky confirms)
+  {
+    const s0Slots = [primary.id, ...Array(7).fill(0)];
+    const s0Vals  = Array(8).fill(0);
+    s0Vals[0] = counterToVal(1, primary.id);
+    const r0 = applyStep(state, s0Slots, s0Vals, equipType, matchElement, smithProf, matReductions);
+    if (!r0 || r0.state.pot < 0) return null;
+    rawSteps.push({ slotStats: [...s0Slots], vals: [...s0Vals], deltas: r0.deltas,
+                    mats: r0.mats, rate: r0.rate, delta: r0.delta, potAfter: r0.state.pot });
+    state = r0.state;
+  }
+
+  // Stage 1: only negative slots assigned → penalty from |neg| slots only
+  const s1Slots = Array(8).fill(0);
+  const s1Vals  = Array(8).fill(0);
+  for (let i = 0; i < negative.length; i++) {
+    s1Slots[negStart + i] = negative[i].id;
+    s1Vals [negStart + i] = negative[i].targetVal;
+  }
+  const r1 = applyStep(state, s1Slots, s1Vals, equipType, matchElement, smithProf, matReductions);
+  if (!r1) return null;
+  rawSteps.push({ slotStats: [...s1Slots], vals: [...s1Vals], deltas: r1.deltas,
+                  mats: r1.mats, rate: r1.rate, delta: r1.delta, potAfter: r1.state.pot });
+  state = r1.state;
+
+  // Stage 2: full slotStats (positives + negatives already placed) → all positives to target
+  const s2Vals = [...state.vals];
+  s2Vals[0] = primary.targetVal;
+  for (let i = 0; i < others.length; i++) s2Vals[1 + i] = others[i].targetVal;
+
+  const r2 = applyStep(state, slotStats, s2Vals, equipType, matchElement, smithProf, matReductions);
+  if (!r2) return null;
+  rawSteps.push({ slotStats: [...slotStats], vals: [...s2Vals], deltas: r2.deltas,
+                  mats: r2.mats, rate: r2.rate, delta: r2.delta, potAfter: r2.state.pot });
+  state = r2.state;
+
+  const compressed = compressSteps(rawSteps);
+  return {
+    splitN: -1, strategy: '2stage',
+    steps: compressed, rawSteps,
+    rate: rawSteps[rawSteps.length - 1].rate,
+    potRemaining: state.pot,
+    totalConfirms: rawSteps.length,
+    startPot
+  };
+}
+
+// Extended progressive: separates "positive intro" from "negative dump" into
+// distinct confirms, letting positives land at lower penalty while negatives
+// still return at full penalty. Matches the 4-5 step pattern external tools use.
+//
+// Sequence:
+//   Step 1: primary OBO in isolation            (slotStats = [primary], penalty=100)
+//   Step 2: intro each other[i] to otherIntroCtrs[i] counters in ONE confirm
+//           (slotStats = positives only, penalty = pos-only categories)
+//   Step 3: dump all negatives to target in ONE confirm
+//           (slotStats = full, only neg slots change → neg return at full penalty)
+//   Step 4: primary OBO continues under full slotStats
+//   Step 5: final at-once — push all other positives from intro → target
+function tryProgressive(primary, others, negative, slotStats, splitN, primaryMaxCtr,
+                        otherIntroCtrs, equipType, startPot, originalPot,
+                        smithProf, matchElement, matReductions) {
+  let state = {
+    slotStats: Array(8).fill(0),
+    vals:      Array(8).fill(0),
+    ctrs:      Array(8).fill(0),
+    pot:       startPot,
+    original:  originalPot
+  };
+  const rawSteps = [];
+
+  // Phase 1: primary OBO alone
+  const phase1Slots = [primary.id, ...Array(7).fill(0)];
+  for (let n = 0; n < splitN; n++) {
+    const newVals = Array(8).fill(0);
+    newVals[0] = counterToVal(n + 1, primary.id);
+    const r = applyStep(state, phase1Slots, newVals, equipType, matchElement, smithProf, matReductions);
+    if (!r) continue;
+    if (r.state.pot < 0) return null;
+    rawSteps.push({ slotStats: [...phase1Slots], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
+    state = r.state;
+  }
+
+  // Phase 2: introduce all other positives (pos-only slotStats, no negs yet)
+  if (others.length > 0) {
+    const posOnlySlots = [primary.id, ...others.map(o => o.id),
+                          ...Array(8 - 1 - others.length).fill(0)];
+    const newVals = [...state.vals];
+    for (let i = 0; i < others.length; i++) {
+      newVals[1 + i] = counterToVal(otherIntroCtrs[i], others[i].id);
+    }
+    const r = applyStep(state, posOnlySlots, newVals, equipType, matchElement, smithProf, matReductions);
+    if (r) {
+      if (r.state.pot < 0) return null;
+      rawSteps.push({ slotStats: [...posOnlySlots], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
+      state = r.state;
+    }
+  }
+
+  // Phase 3: dump all negatives at once (full slotStats; only neg slots change)
+  if (negative.length > 0) {
+    const newVals = [...state.vals];
+    for (let i = 0; i < negative.length; i++) {
+      newVals[1 + others.length + i] = negative[i].targetVal;
+    }
+    const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf, matReductions);
+    if (!r) return null;
+    rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
+    state = r.state;
+  }
+
+  // Phase 4: primary OBO continues under full slotStats
+  for (let n = splitN; n < primaryMaxCtr; n++) {
+    const newVals = [...state.vals];
+    newVals[0] = counterToVal(n + 1, primary.id);
+    const r = applyStep(state, slotStats, newVals, equipType, matchElement, smithProf, matReductions);
+    if (!r) continue;
+    rawSteps.push({ slotStats: [...slotStats], vals: [...newVals], deltas: r.deltas, mats: r.mats, rate: r.rate, delta: r.delta, potAfter: r.state.pot });
+    state = r.state;
+  }
+
+  // Phase 5: final at-once — push all other positives from intro → target
+  const finalVals = [...state.vals];
+  finalVals[0] = primary.targetVal;
+  for (let i = 0; i < others.length; i++) finalVals[1 + i] = others[i].targetVal;
+  const rf = applyStep(state, slotStats, finalVals, equipType, matchElement, smithProf, matReductions);
+  if (rf) {
+    rawSteps.push({ slotStats: [...slotStats], vals: [...finalVals], deltas: rf.deltas, mats: rf.mats, rate: rf.rate, delta: rf.delta, potAfter: rf.state.pot });
+    state = rf.state;
+  }
+
+  if (!rawSteps.length) return null;
+
+  const compressed    = compressSteps(rawSteps);
+  const lastRate      = rawSteps[rawSteps.length - 1].rate;
+  const totalConfirms = rawSteps.length;
+
+  return {
+    splitN, strategy: 'progressive',
+    steps: compressed, rawSteps,
+    rate: lastRate,
+    potRemaining: state.pot,
+    totalConfirms,
+    startPot
+  };
+}
+
 // Main entry: tries all split points, returns ALL distinct rate results (best confirms per rate)
 function generateFormula(positive, negative, equipType, startPot, originalPot, smithProf, matchElement, matReductions = {}) {
   if (!positive.length) return [];
@@ -462,13 +630,48 @@ function generateFormula(positive, negative, equipType, startPot, originalPot, s
   // Collect best (fewest confirms) result per unique success rate
   const byRate = new Map(); // rate → result
 
-  for (let splitN = primaryMaxCtr; splitN >= 0; splitN--) {
+  // splitN >= 1 guarantees Phase 1 runs at least once, locking primary +1
+  // before any risky confirm — protects the "preserve first trait on fail" skill.
+  const splitMin = Math.min(1, primaryMaxCtr);
+
+  for (let splitN = primaryMaxCtr; splitN >= splitMin; splitN--) {
     const r = tryStrategy(primary, others, negative, slotStats, splitN, primaryMaxCtr,
                           equipType, startPot, originalPot, smithProf, matchElement, matReductions);
     if (!r) continue;
     const existing = byRate.get(r.rate);
     if (!existing || r.totalConfirms < existing.totalConfirms) {
       byRate.set(r.rate, r);
+    }
+  }
+
+  // Extended progressive: try two shapes for other-positive intro levels —
+  // minimal (+1 each) and maximal (target each). Separates pos intro from neg dump.
+  if (others.length > 0) {
+    const otherMaxCtrs = others.map(o => Math.floor(valToCounter(o.targetVal, o.id)));
+    const shapes = [
+      otherMaxCtrs.map(() => 1),   // low:  +1 each in Step 2
+      otherMaxCtrs.slice()          // high: target each in Step 2 (skips Step 5 for them)
+    ];
+    for (const shape of shapes) {
+      for (let splitN = primaryMaxCtr; splitN >= splitMin; splitN--) {
+        const rp = tryProgressive(primary, others, negative, slotStats, splitN, primaryMaxCtr,
+                                  shape, equipType, startPot, originalPot, smithProf, matchElement, matReductions);
+        if (!rp) continue;
+        const existing = byRate.get(rp.rate);
+        if (!existing || rp.totalConfirms < existing.totalConfirms) {
+          byRate.set(rp.rate, rp);
+        }
+      }
+    }
+  }
+
+  // Also try pure 2-stage (negatives-first, one-shot positives)
+  const r2 = try2Stage(primary, others, negative, slotStats,
+                       equipType, startPot, originalPot, smithProf, matchElement, matReductions);
+  if (r2) {
+    const existing = byRate.get(r2.rate);
+    if (!existing || r2.totalConfirms < existing.totalConfirms) {
+      byRate.set(r2.rate, r2);
     }
   }
 

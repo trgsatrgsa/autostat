@@ -315,7 +315,8 @@ function getMatReductions() {
   const comp   = [1,2,3,4,5,6].map(i => (+document.getElementById('comp'+i).value||0) / 100);
   // comp[0]=Beast(mat1), comp[1]=Wood(mat2), comp[2]=Metal(mat3), comp[3]=Cloth(mat4), comp[4]=Med(mat5), comp[5]=Mana(mat6)
   const result = {};
-  for (let mid = 1; mid <= 6; mid++) result[mid] = anvil + comp[mid - 1];
+  // Multiplicative stacking — game compounds reductions, doesn't add them.
+  for (let mid = 1; mid <= 6; mid++) result[mid] = 1 - (1 - anvil) * (1 - comp[mid - 1]);
   return result;
 }
 
@@ -323,8 +324,10 @@ function updateMatReductionInfo() {
   const smithProf = +document.getElementById('smithprof').value || 0;
   const smithRed  = (Math.floor(smithProf / 10) + Math.floor(smithProf / 50));
   const anvil     = [1,2,3,4].reduce((s,i) => s + (+document.getElementById('anvil'+i).value||0), 0);
+  // Effective reduction at max compassion (10%) — multiplicative compounding
+  const effMax = (1 - (1 - smithRed/100) * (1 - anvil/100) * 0.90) * 100;
   const el = document.getElementById('mat-red-total');
-  if (el) el.textContent = `Smith ${smithRed}% + Anvil ${anvil}% + Compassion (per type)`;
+  if (el) el.textContent = `Smith ${smithRed}% × Anvil ${anvil}% × Compassion (per type) — effective ~${effMax.toFixed(1)}% reduction at max comp`;
 }
 
 function updatePotInfo() {
