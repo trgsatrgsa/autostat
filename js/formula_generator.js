@@ -357,13 +357,15 @@ function compressSteps(steps) {
       JSON.stringify(steps[i].deltas)    === JSON.stringify(steps[i + repeat].deltas) &&
       JSON.stringify(steps[i].slotStats) === JSON.stringify(steps[i + repeat].slotStats)
     ) repeat++;
-    const totalMats = {};
+    const totalMats = {}, peakMats = {};
     for (let j = i; j < i + repeat; j++) {
       Object.entries(steps[j].mats || {}).forEach(([mid, amt]) => {
         totalMats[mid] = (totalMats[mid] || 0) + amt;
+        peakMats[mid]  = Math.max(peakMats[mid] || 0, amt);
       });
     }
-    result.push({ ...steps[i + repeat - 1], repeat, mats: totalMats });
+    // peakMats = the worst single confirm in the group; used to enforce per-confirm material cap
+    result.push({ ...steps[i + repeat - 1], repeat, mats: totalMats, peakMats });
     i += repeat;
   }
   return result;

@@ -96,6 +96,9 @@ body.dark .r-block.rlow  { border-color: #7a2000; background: #271510; }
 body.dark .r-block.rzero { border-color: #555;    background: #1e2229; }
 
 .r-head { font-weight: bold; margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+.cap-warn { background: #fff3cd; border: 1px solid #d4a72c; border-left: 3px solid #d4a72c;
+            border-radius: 3px; padding: 6px 9px; margin: 4px 0 6px; font-size: 12px; color: #5a4400; }
+body.dark .cap-warn { background: #3a2f10; border-color: #8a6a20; color: #d4b860; }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; }
 .badge.b100  { background: #d4edda; color: #155724; }
 .badge.b90   { background: #fff3cd; color: #856404; }
@@ -202,6 +205,10 @@ body.dark .neg { color: #e06060; }
     <span>Mana</span><select id="comp6" onchange="updateMatReductionInfo()"></select>
   </div>
 
+  <div class="row" style="margin-top:6px"><label>Max per Confirm</label>
+    <input type="number" id="mat-cap" placeholder="0 = no limit" min="0" oninput="saveSettings()"></div>
+  <div class="hint">Warns if any single confirm exceeds this material count (e.g. your bag inventory of one material).</div>
+
   <div class="sec">Equipment</div>
   <div class="row"><label>Type</label>
     <select id="equip-type" onchange="onTypeChange()">
@@ -257,6 +264,8 @@ body.dark .neg { color: #e06060; }
     style="background:#f5eafa;border-color:#9055aa">Auto Neg (Mag)</button>
 
   <button id="gen" onclick="generate()">Generate Formula</button>
+  <button class="add-btn" onclick="resetSettings()" title="Clear saved settings and reload"
+    style="background:#fde0e0;border-color:#cc8888;color:#a04040;width:100%;margin-top:6px">↺ Reset Settings</button>
 </div>
 
 <!-- ── RESULTS ────────────────────────────────────────────── -->
@@ -278,8 +287,26 @@ function toggleDark() {
 
 // ─── STAT OPTION HTML ─────────────────────────────────────────────────────────
 
-const STAT_OPTS = '<option value="0">— none —</option>' +
-  Object.values(STATS).map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+// Awaken element stats (type 'E') are weapon-only — game blocks them on armor.
+function buildStatOpts(equipType) {
+  return '<option value="0">— none —</option>' +
+    Object.values(STATS)
+      .filter(s => !(equipType === 'A' && s.type === 'E'))
+      .map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+}
+function currentStatOpts() { return buildStatOpts(document.getElementById('equip-type').value); }
+
+// Rebuild every slot dropdown using the current equip type.
+// Preserve current selection if still allowed; otherwise clear it.
+function refreshStatDropdowns() {
+  const opts = currentStatOpts();
+  document.querySelectorAll('#pos-body select, #neg-body select').forEach(sel => {
+    const cur = sel.value;
+    sel.innerHTML = opts;
+    if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
+    else { sel.value = '0'; onStatChange(sel.closest('tr')); }
+  });
+}
 
 // ─── SKILL LEVEL DROPDOWNS INIT ───────────────────────────────────────────────
 (function initSkillDropdowns() {
@@ -342,9 +369,18 @@ function updatePotInfo() {
 }
 
 function onTypeChange() {
-  document.getElementById('garb-row').style.display =
-    document.getElementById('equip-type').value === 'A' ? 'flex' : 'none';
+  const isArmor = document.getElementById('equip-type').value === 'A';
+  document.getElementById('garb-row').style.display = isArmor ? 'flex' : 'none';
+  // Switching to Weapon: only clear pot if it came from a garb selection.
+  // Manually-typed weapon pot (or restored-from-storage) stays put.
+  if (!isArmor && document.getElementById('garb-select').value) {
+    document.getElementById('garb-select').value  = '';
+    document.getElementById('start-pot').value    = '';
+    document.getElementById('original-pot').value = '';
+  }
+  refreshStatDropdowns();   // hide awaken elements on armor
   updatePotInfo();
+  saveSettings();
 }
 
 function onGarbChange() {
@@ -387,7 +423,7 @@ function makeRow(idx, isNeg, statId, val) {
   if (isNeg) tr.className = 'neg-row';
   tr.innerHTML = `
     <td style="${isNeg ? 'color:#c00' : ''}">${idx}</td>
-    <td><select onchange="onStatChange(this.closest('tr'))">${STAT_OPTS}</select></td>
+    <td><select onchange="onStatChange(this.closest('tr'))">${currentStatOpts()}</select></td>
     <td>
       <div class="val-ctrl">
         <span class="val-btn" onclick="jumpVal(this.closest('tr'),-1)" title="Min">|−</span>
@@ -398,7 +434,7 @@ function makeRow(idx, isNeg, statId, val) {
         <span class="val-btn" onclick="jumpVal(this.closest('tr'),1)" title="Max">+|</span>
       </div>
     </td>
-    <td><button onclick="this.closest('tr').remove()"
+    <td><button onclick="removeSlotRow(this)"
                 style="cursor:pointer;font-size:11px;padding:2px 7px">✕</button></td>`;
   if (statId) tr.querySelector('select').value = statId;
   return tr;
@@ -412,6 +448,18 @@ function addPos(statId, val = 0) {
 function addNeg(statId, val = 0) {
   const tbody = document.getElementById('neg-body');
   tbody.appendChild(makeRow(tbody.children.length + 1, true, statId, val));
+}
+
+// Remove a slot row and renumber the remaining rows in its tbody.
+// The # column is rendered once per row at creation; without renumbering,
+// deleting row 1 would leave 2,3,4 instead of 1,2,3.
+function removeSlotRow(btn) {
+  const tr = btn.closest('tr');
+  const tbody = tr.parentElement;
+  tr.remove();
+  [...tbody.children].forEach((row, i) => {
+    row.firstElementChild.textContent = i + 1;
+  });
 }
 
 function getLevel() { return +document.getElementById('baselevel').value || 1; }
@@ -557,6 +605,21 @@ function rateLabel(r) {
   return '0% — Will Fail';
 }
 
+function getMatCap() { return +document.getElementById('mat-cap').value || 0; }
+
+// Per-confirm material cap check. peakMats holds the worst single confirm in each
+// compressed step group — that's what we compare against the user's cap.
+function findCapViolations(steps, cap) {
+  if (cap <= 0) return [];
+  const v = [];
+  steps.forEach((step, si) => {
+    Object.entries(step.peakMats || {}).forEach(([mid, amt]) => {
+      if (amt > cap) v.push({ step: si + 1, mat: MATERIAL[mid], peak: amt, repeat: step.repeat || 1 });
+    });
+  });
+  return v;
+}
+
 function renderResult(res, idx) {
   if (res.error) return `<div class="r-block"><div class="err">${res.error}</div></div>`;
 
@@ -623,12 +686,33 @@ function renderResult(res, idx) {
 
   _resultData[idx] = res;
 
+  const cap = getMatCap();
+  const viols = findCapViolations(res.steps, cap);
+  let warnHtml = '';
+  if (viols.length) {
+    const items = viols.map(v =>
+      `<li>STEP #${v.step}: ${v.mat} peak <b>${v.peak.toLocaleString()}</b> &gt; cap ${cap.toLocaleString()}` +
+      (v.repeat > 1 ? ` (worst confirm in a ×${v.repeat} group)` : '') + `</li>`
+    ).join('');
+    warnHtml =
+      `<div class="cap-warn">
+        <b>⚠ Material cap exceeded — split these confirms in-game</b>
+        <ul style="margin:4px 0 4px 18px;padding:0">${items}</ul>
+        <div style="font-size:11px;color:var(--fg-dim)">
+          Material cost grows with counter² — a single +5 jump costs more than five +1 jumps combined.
+          Break the offending confirm into smaller increments (e.g. +5 → +3 then +2, or +1 ×5).
+          Same final stat, but each confirm consumes less material.
+        </div>
+      </div>`;
+  }
+
   return `<div class="r-block ${rc}" data-idx="${idx}">
     <div class="r-head">
       <span class="badge ${bc}">${rateLabel(res.rate)}</span>
       <span style="font-size:11px;color:var(--fg-hint)">${res.totalConfirms} confirms · split N=${res.splitN} · pot left: ${res.potRemaining}</span>
       <button class="stp-btn" onclick="openStepper(this)">▶ Step Through</button>
     </div>
+    ${warnHtml}
     ${stepsHtml}
     <div class="mat-row">Materials: ${matsStr}</div>
   </div>`;
@@ -811,23 +895,90 @@ function generate() {
   area.innerHTML = hdr + results.map(renderResult).join('');
 }
 
-// ─── INIT (prefill example) ───────────────────────────────────────────────────
+// ─── SETTINGS PERSISTENCE (localStorage) ──────────────────────────────────────
+// Saves character/equipment/material config across reloads. Target stats are NOT
+// persisted — those vary per build, save them manually if needed in future.
 
-(function prefill() {
+const SETTINGS_KEY = 'autostat-settings';
+const PERSIST_IDS = [
+  'baselevel', 'smithprof',
+  'anvil1', 'anvil2', 'anvil3', 'anvil4',
+  'comp1', 'comp2', 'comp3', 'comp4', 'comp5', 'comp6',
+  'equip-type', 'match-element',
+  'garb-select', 'start-pot', 'original-pot',
+  'mat-cap',
+];
+
+function saveSettings() {
+  const data = {};
+  PERSIST_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) data[id] = el.value;
+  });
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(data)); } catch (e) { /* quota / private mode */ }
+}
+
+function loadSettings() {
+  let raw;
+  try { raw = localStorage.getItem(SETTINGS_KEY); } catch (e) { return false; }
+  if (!raw) return false;
+  try {
+    const data = JSON.parse(raw);
+    Object.entries(data).forEach(([id, v]) => {
+      const el = document.getElementById(id);
+      if (el && v !== '' && v != null) el.value = v;
+    });
+    return true;
+  } catch (e) { return false; }
+}
+
+function resetSettings() {
+  if (!confirm('Clear saved settings and reload? Your target stats are not affected.')) return;
+  try { localStorage.removeItem(SETTINGS_KEY); } catch (e) {}
+  location.reload();
+}
+
+// One delegated listener per persisted input. Saves on every change.
+function attachAutoSave() {
+  PERSIST_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const evt = (el.tagName === 'SELECT') ? 'change' : 'input';
+    el.addEventListener(evt, saveSettings);
+  });
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+
+(function init() {
+  // Always seed example target stats (not persisted, gives newcomers a starting point).
   // Same example as the readme: Armor 59 pot
   // Positive: Critical Damage +20, Critical Rate +28, DEX% +10, % vs Dark +21
   [[43,20],[41,28],[12,10],[50,21]].forEach(([id,v]) => addPos(id, v));
   // Negative: Accuracy -22, Accuracy% -6, Magic Pierce% -8, MATK% -14
   [[33,-22],[34,-6],[26,-8],[23,-14]].forEach(([id,v]) => addNeg(id, v));
 
-  // Select the matching garb (Anniversary Festive Garb, pot=38... no, use 59 manually)
-  document.getElementById('baselevel').value    = 315;
-  document.getElementById('smithprof').value    = 0;
-  document.getElementById('equip-type').value   = 'A';
-  document.getElementById('original-pot').value = 59;
-  document.getElementById('start-pot').value    = 59;
-  onTypeChange();
+  const restored = loadSettings();
+  if (!restored) {
+    // First-time visitor — apply default character + equipment values.
+    document.getElementById('baselevel').value    = 315;
+    document.getElementById('smithprof').value    = 0;
+    document.getElementById('equip-type').value   = 'A';
+    document.getElementById('original-pot').value = 59;
+    document.getElementById('start-pot').value    = 59;
+  } else {
+    // Restored: if start-pot and original-pot diverged, the user was using Manual mode — re-open it.
+    const sp = +document.getElementById('start-pot').value || 0;
+    const op = +document.getElementById('original-pot').value || 0;
+    if (sp && op && sp !== op) {
+      document.getElementById('manual-pot-row').style.display = 'block';
+      document.getElementById('manual-toggle').textContent    = 'Simple';
+    }
+  }
+  attachAutoSave();
+  onTypeChange();           // refreshes stat dropdowns based on equip type
   updatePotInfo();
+  updateMatReductionInfo();
   updateAllRanges();
 })();
 </script>
